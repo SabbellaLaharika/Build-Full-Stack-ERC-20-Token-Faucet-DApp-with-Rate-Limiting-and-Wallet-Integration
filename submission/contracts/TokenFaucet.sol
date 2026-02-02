@@ -45,7 +45,9 @@ contract TokenFaucet {
     }
 
     function requestTokens() external whenNotPaused {
-        require(canClaim(msg.sender), "Cooldown period not elapsed or limit reached");
+        if (block.timestamp < lastClaimAt[msg.sender] + COOLDOWN_TIME) {
+            revert("Cooldown period not elapsed");
+        }
         require(remainingAllowance(msg.sender) >= FAUCET_AMOUNT, "Lifetime claim limit reached");
         
         lastClaimAt[msg.sender] = block.timestamp;

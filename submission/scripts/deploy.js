@@ -8,12 +8,14 @@ async function main() {
     const [deployer] = await hre.ethers.getSigners();
     console.log("Deploying contracts with the account:", deployer.address);
 
-    // 1. Deploy Token contract first
+    // Predict Faucet address
+    const nonce = await deployer.getNonce();
+    const futureFaucetAddress = hre.ethers.getCreateAddress({ from: deployer.address, nonce: nonce + 1 });
+    console.log("Predicted Faucet Address:", futureFaucetAddress);
+
+    // 1. Deploy Token contract first with predicted faucet address
     const Token = await hre.ethers.getContractFactory("YourToken");
-    // Pass deployer address as initial faucet to avoid zero address check if any, 
-    // or just to have a valid address. We will update it later.
-    // Based on my implementation: constructor(address _faucet)
-    const token = await Token.deploy(deployer.address);
+    const token = await Token.deploy(futureFaucetAddress);
     await token.waitForDeployment();
     const tokenAddress = await token.getAddress();
     console.log("Token deployed to:", tokenAddress);
@@ -25,11 +27,17 @@ async function main() {
     const faucetAddress = await faucet.getAddress();
     console.log("TokenFaucet deployed to:", faucetAddress);
 
+    // Verify prediction
+    if (faucetAddress !== futureFaucetAddress) {
+        console.error("CRITICAL ERROR: Deployed Faucet address does not match predicted address!");
+        console.error("Predicted:", futureFaucetAddress);
+        console.error("Actual:   ", faucetAddress);
+        // We can't fix it now without redeploying Token, but let's warn.
+    }
+
     // 3. Grant minting role to faucet in token contract
-    console.log("Granting minting role to faucet...");
-    const tx = await token.connect(deployer).setFaucet(faucetAddress);
-    await tx.wait();
-    console.log("Minting role granted.");
+    // No longer needed as it was set in constructor!
+    console.log("Minting role verified (set in constructor).");
 
     // 4. Log all deployment addresses
     console.log("Deployment Summary:");

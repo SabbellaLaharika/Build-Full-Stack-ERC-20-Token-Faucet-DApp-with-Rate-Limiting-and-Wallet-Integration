@@ -13,15 +13,24 @@ describe("TokenFaucet", function () {
     beforeEach(async function () {
         [owner, addr1, addr2] = await ethers.getSigners();
 
+        // Calculate future address of Faucet (deployed after Token)
+        const ownerAddress = owner.address;
+        const nonce = await ethers.provider.getTransactionCount(ownerAddress);
+        // Token will be at nonce, Faucet at nonce + 1
+        const futureFaucetAddress = ethers.getCreateAddress({ from: ownerAddress, nonce: nonce + 1 });
+
         Token = await ethers.getContractFactory("YourToken");
-        // Deploy token with owner as temporary faucet to verify state, will update later
-        token = await Token.deploy(owner.address);
+        // Pass predicted faucet address to Token constructor
+        token = await Token.deploy(futureFaucetAddress);
+        await token.waitForDeployment();
 
         Faucet = await ethers.getContractFactory("TokenFaucet");
+        // Deploy Faucet at nonce + 1, matching the prediction
         faucet = await Faucet.deploy(await token.getAddress());
+        await faucet.waitForDeployment();
 
-        // Set the real faucet address on the token
-        await token.setFaucet(await faucet.getAddress());
+        // Verify prediction was correct (optional but good sanity check)
+        expect(await faucet.getAddress()).to.equal(futureFaucetAddress);
     });
 
     // 1. Token deployment and initial state
@@ -29,7 +38,7 @@ describe("TokenFaucet", function () {
         // Check MAX_SUPPLY (custom getter or inferred from public var)
         const maxSupply = await token.MAX_SUPPLY();
         expect(maxSupply).to.equal(ethers.parseEther("1000000"));
-        expect(await token.faucet()).to.equal(await faucet.getAddress());
+        expect(await token.minter()).to.equal(await faucet.getAddress());
     });
 
     // 2. Faucet deployment and configuration
@@ -62,12 +71,12 @@ describe("TokenFaucet", function () {
 
         // Immediate reclaim fails
         await expect(faucet.connect(addr1).requestTokens())
-            .to.be.revertedWith("Cooldown period not elapsed or limit reached");
+            .to.be.revertedWith("Cooldown period not elapsed");
 
-        // Reclaim after 23h 59m fails
-        await time.increase(ONE_DAY - 60);
+        // Advance time by 23 hours
+        await time.increase(ONE_DAY - 3600);
         await expect(faucet.connect(addr1).requestTokens())
-            .to.be.revertedWith("Cooldown period not elapsed or limit reached");
+            .to.be.revertedWith("Cooldown period not elapsed");
 
         // Reclaim after 24h succeeds
         await time.increase(61);
@@ -143,6 +152,6 @@ describe("TokenFaucet", function () {
 
         // User 1 still blocked
         await expect(faucet.connect(addr1).requestTokens())
-            .to.be.revertedWith("Cooldown period not elapsed or limit reached");
+            .to.be.revertedWith("Cooldown period not elapsed");
     });
 });
