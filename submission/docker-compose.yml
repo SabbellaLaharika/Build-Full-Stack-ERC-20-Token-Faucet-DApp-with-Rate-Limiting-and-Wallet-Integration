@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/src/contracts.json:/usr/share/nginx/html/contracts.json
+      # Note: Mounting contracts.json might be tricky if it's bundled.
+      # Since we build the app, contracts.json is imported into the bundle.
+      # So we don't need to mount it at runtime unless we want dynamic config.
+      # For this task, the build bake-in is sufficient.
+    environment:
+      - VITE_RPC_URL=${VITE_RPC_URL}
+      - VITE_TOKEN_ADDRESS=${VITE_TOKEN_ADDRESS}
+      - VITE_FAUCET_ADDRESS=${VITE_FAUCET_ADDRESS}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
